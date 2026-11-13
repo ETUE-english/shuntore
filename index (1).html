@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>瞬トレ！ Lesson 01</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#243244;background:#f6f8fb}
+*{box-sizing:border-box}body{margin:0;padding:18px}main{max-width:600px;margin:auto}
+header{display:flex;align-items:center;justify-content:space-between;margin:8px 0 20px}h1{font-size:30px;margin:0}small,.muted{color:#637184}
+.card{background:white;border:1px solid #dfe5ed;border-radius:18px;padding:22px;margin-bottom:16px;box-shadow:0 2px 12px #172b4d09}
+h2{font-size:21px;margin:0 0 12px}.prompt{font-size:clamp(23px,5vw,31px);line-height:1.65;font-weight:700;text-align:center;padding:28px 8px}
+button,select{font:inherit}button{border:1px solid #b9c7d9;background:white;color:#243244;padding:14px 18px;border-radius:12px;font-weight:700;cursor:pointer;min-height:52px}
+button.primary{background:#2364a6;color:white;border-color:#2364a6}button:disabled{opacity:.45;cursor:not-allowed}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{width:100%}.answer{background:#eff6fd;padding:16px;border-radius:12px;margin:14px 0;font-size:21px;line-height:1.55}
+#timer{font-size:27px;font-weight:800;text-align:center;color:#b45309;min-height:39px}
+.pill{font-size:13px;background:#eaf0f6;border-radius:20px;padding:7px 11px}
+#status{font-size:14px;line-height:1.7}.hidden{display:none!important}.divider{border-top:1px solid #e4e8ef;margin:16px 0}
+label{display:block;margin-bottom:8px;font-weight:700}select{padding:12px;border-radius:10px;border:1px solid #bcc8d6;width:100%;background:white}
+.note{font-size:13px;line-height:1.7;color:#5b687a}
+</style></head><body><main>
+<header><div><h1>瞬トレ！</h1><small>大人の学び直し英会話 · Lesson 01</small></div><span class="pill">ログイン不要</span></header>
+<section class="card" id="home"><h2>好きなこと・楽しんでいることを伝えよう</h2>
+<p>日本語を見て、英語で声に出してみましょう。答えを確認したら「言えた」「言えなかった」を選びます。</p>
+<label for="mode">練習モード</label><select id="mode"><option value="free">時間制限なし（おすすめ）</option><option value="5">5秒チャレンジ</option></select>
+<div class="divider"></div>
+<div class="controls"><button class="primary" id="start">10問を練習</button><button id="review">苦手問題を復習</button></div>
+<p class="note" id="reviewCount"></p><p class="note">学習記録はこの端末のブラウザ内に保存されます。ブラウザのデータ削除などで消えることがあります。</p>
+</section>
+<section class="card hidden" id="quiz">
+<div style="display:flex;justify-content:space-between;gap:8px"><span class="pill" id="progress"></span><span class="pill" id="kind"></span></div>
+<div class="prompt" id="jp"></div><div id="timer"></div>
+<div class="controls" id="pre"><button class="primary full" id="reveal" style="grid-column:span 2">模範解答を見る</button></div>
+<div id="post" class="hidden"><div class="answer" id="en"></div>
+<button class="full" id="speak">🔊 英語を聞く</button><p id="voiceStatus" class="note" role="status" aria-live="polite"></p>
+<p class="note">※模範解答を見る前に言えた場合だけ「言えた」を選びましょう。</p>
+<div class="controls"><button id="yes" class="primary">言えた ✓</button><button id="no">言えなかった</button></div></div>
+</section>
+<section class="card hidden" id="finish"><h2>おつかれさまでした！ 🌷</h2><p id="summary"></p><div class="controls"><button id="again" class="primary">もう一度練習</button><button id="back">トップに戻る</button></div></section>
+<p class="note">このページは教材の練習問題01〜10と解答例を使用した試作版（音声改善版）です。音声は端末の読み上げ機能を使います。インターネット公開・配布はまだ行っていません。</p>
+</main><script>
+const questions=[
+["ガーデニングが趣味です。","I like gardening."],
+["家で漫画を読むのが大好き。","I love reading manga at home."],
+["料理や焼菓子作りが大好き。","I love cooking and baking."],
+["自然の中で過ごすのが楽しい。","I enjoy spending time in nature."],
+["ジムに行ってトレーニングするのが楽しい。","I enjoy working out at the gym."],
+["１人でゲームをするのが大好き。","I love playing video games alone."],
+["音楽が大好きで、自分の周りにはいつも音楽がある。","I love music, which is always around me."],
+["身体を動かすのが好き。特にジョギングが好き。","I like exercising, especially jogging."],
+["リフレッシュできるから自転車に乗るのが好き。","I like cycling because it's refreshing."],
+["時間があるときに YouTube 動画で新しいレシピを知るのが楽しい。","In my free time, I enjoy watching YouTube videos to learn new recipes."]
+];
+const $=id=>document.getElementById(id);
+const key="shuntore_lesson01_v1";
+function load(){try{return JSON.parse(localStorage.getItem(key))||{}}catch{return {}}}
+function save(d){try{localStorage.setItem(key,JSON.stringify(d))}catch{}}
+let list=[],pos=0,correct=0,interval=null,seconds=5,isReview=false;
+function hideAll(){["home","quiz","finish"].forEach(id=>$(id).classList.add("hidden"))}
+function count(){let d=load();let n=questions.filter((_,i)=>d[i]?.missed).length;$("reviewCount").textContent=`復習する問題：${n}問（同じ端末に記録）`; $("review").disabled=n===0}
+function stop(){clearInterval(interval);interval=null}
+function begin(review){stop();isReview=review;let d=load();list=questions.map((_,i)=>i).filter(i=>!review||d[i]?.missed);if(!list.length){hideAll();$("home").classList.remove("hidden");count();return}pos=0;correct=0;hideAll();$("quiz").classList.remove("hidden");render()}
+function render(){stop();if("speechSynthesis" in window)window.speechSynthesis.cancel();$("voiceStatus").textContent="";let i=list[pos];$("progress").textContent=`${pos+1} / ${list.length}`;$("kind").textContent=isReview?"苦手問題の復習":"Lesson 01";$("jp").textContent=questions[i][0];$("en").textContent=questions[i][1];$("pre").classList.remove("hidden");$("post").classList.add("hidden");$("timer").textContent="";if($("mode").value==="5"){seconds=5;$("timer").textContent=`残り ${seconds} 秒`;interval=setInterval(()=>{seconds--;$("timer").textContent=seconds>0?`残り ${seconds} 秒`:"時間です！ 答えを確認しましょう";if(seconds<=0)stop()},1000)}}
+$("reveal").onclick=()=>{stop();$("pre").classList.add("hidden");$("post").classList.remove("hidden")};
+// iOS Safari: prepare voices after voiceschanged, and provide feedback on failures.
+let availableVoices=[];
+function refreshVoices(){if("speechSynthesis" in window)availableVoices=window.speechSynthesis.getVoices()||[]}
+refreshVoices();
+if("speechSynthesis" in window)window.speechSynthesis.addEventListener?.("voiceschanged",refreshVoices);
+$("speak").onclick=()=>{
+ const status=$("voiceStatus");status.textContent="音声を準備しています…";
+ if(!("speechSynthesis" in window)||!("SpeechSynthesisUtterance" in window)){status.textContent="このブラウザは読み上げに対応していません。Safariで開いてください。";return}
+ try{
+  const synth=window.speechSynthesis;
+  synth.cancel();refreshVoices();
+  const u=new SpeechSynthesisUtterance(questions[list[pos]][1]);
+  u.lang="en-US";u.rate=0.9;u.volume=1;
+  const english=availableVoices.filter(v=>/^en(-|_)/i.test(v.lang));
+  const us=english.find(v=>/^en[-_]US$/i.test(v.lang));
+  if(us||english[0])u.voice=us||english[0];
+  u.onstart=()=>{status.textContent="再生中です…"};
+  u.onend=()=>{status.textContent="再生が終わりました。"};
+  u.onerror=e=>{status.textContent="音声を再生できませんでした（"+(e.error||"原因不明")+"）。音量と消音設定を確認し、Safariで再試行してください。"};
+  synth.speak(u);
+  if(synth.paused)synth.resume();
+  // Safari can remain silently pending; tell the user rather than failing invisibly.
+  setTimeout(()=>{if(status.textContent==="音声を準備しています…")status.textContent="音が聞こえない場合は、音量を上げてもう一度押してください。Safariで直接開くこともお試しください。"},1800);
+ }catch(e){status.textContent="音声を開始できませんでした。Safariで開き直してお試しください。"}
+};
+function grade(ok){let i=list[pos],d=load();d[i]={missed:!ok,updated:new Date().toISOString()};save(d);if(ok)correct++;pos++;if(pos<list.length)render();else{hideAll();$("finish").classList.remove("hidden");$("summary").textContent=`${list.length}問中、${correct}問「言えた」！ 言えなかった問題は「苦手問題を復習」からもう一度練習できます。`;count()}}
+$("yes").onclick=()=>grade(true);$("no").onclick=()=>grade(false);
+$("start").onclick=()=>begin(false);$("review").onclick=()=>begin(true);$("again").onclick=()=>begin(isReview);$("back").onclick=()=>{stop();hideAll();$("home").classList.remove("hidden");count()};count();
+</script></body></html>
