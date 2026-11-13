@@ -29,12 +29,12 @@ label{display:block;margin-bottom:8px;font-weight:700}select{padding:12px;border
 <div class="prompt" id="jp"></div><div id="timer"></div>
 <div class="controls" id="pre"><button class="primary full" id="reveal" style="grid-column:span 2">模範解答を見る</button></div>
 <div id="post" class="hidden"><div class="answer" id="en"></div>
-<button class="full" id="speak">🔊 英語を聞く</button>
+<button class="full" id="speak">🔊 英語を聞く</button><p id="voiceStatus" class="note" role="status" aria-live="polite"></p>
 <p class="note">※模範解答を見る前に言えた場合だけ「言えた」を選びましょう。</p>
 <div class="controls"><button id="yes" class="primary">言えた ✓</button><button id="no">言えなかった</button></div></div>
 </section>
 <section class="card hidden" id="finish"><h2>おつかれさまでした！ 🌷</h2><p id="summary"></p><div class="controls"><button id="again" class="primary">もう一度練習</button><button id="back">トップに戻る</button></div></section>
-<p class="note">このページは教材の練習問題01〜10と解答例を使用した試作版です。音声は端末の読み上げ機能を使います。インターネット公開・配布はまだ行っていません。</p>
+<p class="note">このページは教材の練習問題01〜10と解答例を使用した試作版（音声改善版）です。音声は端末の読み上げ機能を使います。インターネット公開・配布はまだ行っていません。</p>
 </main><script>
 const questions=[
 ["ガーデニングが趣味です。","I like gardening."],
@@ -57,9 +57,33 @@ function hideAll(){["home","quiz","finish"].forEach(id=>$(id).classList.add("hid
 function count(){let d=load();let n=questions.filter((_,i)=>d[i]?.missed).length;$("reviewCount").textContent=`復習する問題：${n}問（同じ端末に記録）`; $("review").disabled=n===0}
 function stop(){clearInterval(interval);interval=null}
 function begin(review){stop();isReview=review;let d=load();list=questions.map((_,i)=>i).filter(i=>!review||d[i]?.missed);if(!list.length){hideAll();$("home").classList.remove("hidden");count();return}pos=0;correct=0;hideAll();$("quiz").classList.remove("hidden");render()}
-function render(){stop();let i=list[pos];$("progress").textContent=`${pos+1} / ${list.length}`;$("kind").textContent=isReview?"苦手問題の復習":"Lesson 01";$("jp").textContent=questions[i][0];$("en").textContent=questions[i][1];$("pre").classList.remove("hidden");$("post").classList.add("hidden");$("timer").textContent="";if($("mode").value==="5"){seconds=5;$("timer").textContent=`残り ${seconds} 秒`;interval=setInterval(()=>{seconds--;$("timer").textContent=seconds>0?`残り ${seconds} 秒`:"時間です！ 答えを確認しましょう";if(seconds<=0)stop()},1000)}}
+function render(){stop();if("speechSynthesis" in window)window.speechSynthesis.cancel();$("voiceStatus").textContent="";let i=list[pos];$("progress").textContent=`${pos+1} / ${list.length}`;$("kind").textContent=isReview?"苦手問題の復習":"Lesson 01";$("jp").textContent=questions[i][0];$("en").textContent=questions[i][1];$("pre").classList.remove("hidden");$("post").classList.add("hidden");$("timer").textContent="";if($("mode").value==="5"){seconds=5;$("timer").textContent=`残り ${seconds} 秒`;interval=setInterval(()=>{seconds--;$("timer").textContent=seconds>0?`残り ${seconds} 秒`:"時間です！ 答えを確認しましょう";if(seconds<=0)stop()},1000)}}
 $("reveal").onclick=()=>{stop();$("pre").classList.add("hidden");$("post").classList.remove("hidden")};
-$("speak").onclick=()=>{if(!("speechSynthesis" in window)){alert("この端末では読み上げ機能を利用できません。");return}speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(questions[list[pos]][1]);u.lang="en-US";u.rate=.85;speechSynthesis.speak(u)};
+// iOS Safari: prepare voices after voiceschanged, and provide feedback on failures.
+let availableVoices=[];
+function refreshVoices(){if("speechSynthesis" in window)availableVoices=window.speechSynthesis.getVoices()||[]}
+refreshVoices();
+if("speechSynthesis" in window)window.speechSynthesis.addEventListener?.("voiceschanged",refreshVoices);
+$("speak").onclick=()=>{
+ const status=$("voiceStatus");status.textContent="音声を準備しています…";
+ if(!("speechSynthesis" in window)||!("SpeechSynthesisUtterance" in window)){status.textContent="このブラウザは読み上げに対応していません。Safariで開いてください。";return}
+ try{
+  const synth=window.speechSynthesis;
+  synth.cancel();refreshVoices();
+  const u=new SpeechSynthesisUtterance(questions[list[pos]][1]);
+  u.lang="en-US";u.rate=0.9;u.volume=1;
+  const english=availableVoices.filter(v=>/^en(-|_)/i.test(v.lang));
+  const us=english.find(v=>/^en[-_]US$/i.test(v.lang));
+  if(us||english[0])u.voice=us||english[0];
+  u.onstart=()=>{status.textContent="再生中です…"};
+  u.onend=()=>{status.textContent="再生が終わりました。"};
+  u.onerror=e=>{status.textContent="音声を再生できませんでした（"+(e.error||"原因不明")+"）。音量と消音設定を確認し、Safariで再試行してください。"};
+  synth.speak(u);
+  if(synth.paused)synth.resume();
+  // Safari can remain silently pending; tell the user rather than failing invisibly.
+  setTimeout(()=>{if(status.textContent==="音声を準備しています…")status.textContent="音が聞こえない場合は、音量を上げてもう一度押してください。Safariで直接開くこともお試しください。"},1800);
+ }catch(e){status.textContent="音声を開始できませんでした。Safariで開き直してお試しください。"}
+};
 function grade(ok){let i=list[pos],d=load();d[i]={missed:!ok,updated:new Date().toISOString()};save(d);if(ok)correct++;pos++;if(pos<list.length)render();else{hideAll();$("finish").classList.remove("hidden");$("summary").textContent=`${list.length}問中、${correct}問「言えた」！ 言えなかった問題は「苦手問題を復習」からもう一度練習できます。`;count()}}
 $("yes").onclick=()=>grade(true);$("no").onclick=()=>grade(false);
 $("start").onclick=()=>begin(false);$("review").onclick=()=>begin(true);$("again").onclick=()=>begin(isReview);$("back").onclick=()=>{stop();hideAll();$("home").classList.remove("hidden");count()};count();
